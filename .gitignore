@@ -1,1 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+venv/
+.venv/
+
 .idea/
+
+
+# 中间生成文件
+./temp_test.rs
