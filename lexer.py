@@ -38,10 +38,8 @@ class Lexer:
         self.line   = 1
         self.column = 1
 
-    def peek(self) -> str:
-        if self.pos < len(self.text):
-            return self.text[self.pos]
-        return ''
+    def peek(self, n: int = 1) -> str:
+        return self.text[self.pos:self.pos + n] if self.pos + n <= len(self.text) else ''
 
     def advance(self, n: int = 1):
         for _ in range(n):
@@ -85,7 +83,53 @@ class Lexer:
 
         # 数字字面量
         if c.isdigit():
+            start_line, start_col = self.line, self.column
+            base = 10
             num = ''
+
+            # 查看前缀
+            if self.pos + 1 < len(self.text):
+                prefix = self.text[self.pos:self.pos + 2]
+
+                # 非法前缀（如 0z）
+                if prefix.startswith('0') and prefix not in ('0b', '0o', '0x') and prefix[1].isalpha():
+                    self.advance(2)
+                    return Token(TokenKind.ERROR, prefix, start_line, start_col)
+
+                # 二进制
+                if prefix == '0b':
+                    base = 2
+                    self.advance(2)
+                    while self.peek() in '01':
+                        num += self.peek()
+                        self.advance()
+                    if not num:
+                        return Token(TokenKind.ERROR, '0b', start_line, start_col)
+                    return Token(TokenKind.NUMBER, f'0b{num}', start_line, start_col)
+
+                # 八进制
+                if prefix == '0o':
+                    base = 8
+                    self.advance(2)
+                    while self.peek() in '01234567':
+                        num += self.peek()
+                        self.advance()
+                    if not num:
+                        return Token(TokenKind.ERROR, '0o', start_line, start_col)
+                    return Token(TokenKind.NUMBER, f'0o{num}', start_line, start_col)
+
+                # 十六进制
+                if prefix == '0x':
+                    base = 16
+                    self.advance(2)
+                    while self.peek().lower() in '0123456789abcdef':
+                        num += self.peek()
+                        self.advance()
+                    if not num:
+                        return Token(TokenKind.ERROR, '0x', start_line, start_col)
+                    return Token(TokenKind.NUMBER, f'0x{num}', start_line, start_col)
+
+            # 普通十进制
             while self.peek().isdigit():
                 num += self.peek()
                 self.advance()
