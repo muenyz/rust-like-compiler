@@ -5,6 +5,7 @@ import pickle
 import sys
 from lexer import tokenize_file, TokenKind, Token
 from ast_nodes import *
+os.environ["PATH"] += os.pathsep + r"C:\Program Files\Graphviz\bin"
 
 PARSE_TABLE_FILE = 'parse_tables.pkl'
 
@@ -473,3 +474,9 @@ if __name__ == '__main__':
 
     # 格式化输出 AST
     print(str(ast))
+
+    dot = ast.graphviz()
+    dot.format = 'png'
+    dot.render('ast', view=True)  # 生成ast.png并自动打开
+
+
