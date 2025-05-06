@@ -384,7 +384,7 @@ class LR1Parser:
                 return children[1]
             # NUMBER
             if rhs == ['NUMBER']:
-                return NumberLit(int(children[0].value))
+                return NumberLit(int(children[0].value,0))
             # Assignable
             if rhs == ['Assignable']:
                 return children[0]
@@ -420,7 +420,7 @@ class LR1Parser:
             if rhs == ['Primary', '[', 'Expr', ']']:
                 return IndexExpr(children[0], children[2])
             if rhs == ['Primary', '.', 'NUMBER']:
-                return MemberExpr(children[0], int(children[2].value))
+                return MemberExpr(children[0], int(children[2].value,0))
             if rhs == ['IDENT']:
                 return Ident(children[0].value)
             if rhs == ['*', 'Primary']:
@@ -435,7 +435,7 @@ class LR1Parser:
             if rhs == ['&', 'mut', 'Type']:
                 return ('&mut', children[2])
             if rhs == ['[', 'Type', ';', 'NUMBER', ']']:
-                return ('array', children[1], int(children[3].value))
+                return ('array', children[1], int(children[3].value,0))
             if rhs == ['(', ')']:
                 return TupleLiteral([])
             if rhs == ['(', 'TypeList', ')']:
