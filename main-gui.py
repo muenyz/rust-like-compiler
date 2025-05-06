@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 from lr1_parser import LR1Parser
 from lexer import tokenize_file
 from PIL import Image, ImageTk
+import traceback
 
 class CompilerApp(ctk.CTk):
     def __init__(self):
@@ -36,28 +37,52 @@ class CompilerApp(ctk.CTk):
         self.appearance_option.set("Dark")
         self.appearance_option.grid(row=0, column=2, sticky="e", padx=10)
 
-        # ===== 左侧代码输入区域 =====
-        self.code_input = tk.Text(self, bg="#1e1e1e", fg="white",
-                                  insertbackground="white", font=("Courier", 11))
-        self.code_input.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=(0, 10))
+        # ===== 左侧代码输入区域（含滚动条） =====
+        code_frame = tk.Frame(self, bg="#1e1e1e")
+        code_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=(0, 10))
+        code_frame.grid_rowconfigure(0, weight=1)
+        code_frame.grid_columnconfigure(0, weight=1)
 
-        # ===== 右侧标签页（词法分析 + AST图） =====
+        self.code_input = tk.Text(code_frame, bg="#1e1e1e", fg="white",
+                                  insertbackground="white", font=("Courier", 11))
+        self.code_input.grid(row=0, column=0, sticky="nsew")
+        code_scroll = tk.Scrollbar(code_frame, command=self.code_input.yview)
+        code_scroll.grid(row=0, column=1, sticky="ns")
+        self.code_input.config(yscrollcommand=code_scroll.set)
+
+        # ===== 右侧标签页 =====
         self.result_tabs = ctk.CTkTabview(self)
         self.result_tabs.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=(0, 10))
 
-        # ---- 标签1：词法分析结果 ----
+        # ---- 标签1：词法分析（含滚动条） ----
         self.token_tab = self.result_tabs.add("词法分析")
-        self.token_output = tk.Text(self.token_tab, bg="#262626", fg="white",
-                                    insertbackground="white", font=("Courier", 10))
-        self.token_output.pack(fill="both", expand=True, padx=10, pady=10)
+        token_frame = tk.Frame(self.token_tab, bg="#262626")
+        token_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        token_frame.grid_rowconfigure(0, weight=1)
+        token_frame.grid_columnconfigure(0, weight=1)
 
-        # ---- 标签2：语法分析结果 ----
+        self.token_output = tk.Text(token_frame, bg="#262626", fg="white",
+                                    insertbackground="white", font=("Courier", 10), state="disabled")
+        self.token_output.grid(row=0, column=0, sticky="nsew")
+        token_scroll = tk.Scrollbar(token_frame, command=self.token_output.yview)
+        token_scroll.grid(row=0, column=1, sticky="ns")
+        self.token_output.config(yscrollcommand=token_scroll.set)
+
+        # ---- 标签2：语法分析（含滚动条） ----
         self.ast_raw_tab = self.result_tabs.add("语法分析")
-        self.ast_output = tk.Text(self.ast_raw_tab, bg="#262626", fg="white",
-                                  insertbackground="white", font=("Courier", 10))
-        self.ast_output.pack(fill="both", expand=True, padx=10, pady=10)
+        ast_frame = tk.Frame(self.ast_raw_tab, bg="#262626")
+        ast_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        ast_frame.grid_rowconfigure(0, weight=1)
+        ast_frame.grid_columnconfigure(0, weight=1)
 
-        # ---- 标签3：AST可视化 ----
+        self.ast_output = tk.Text(ast_frame, bg="#262626", fg="white",
+                                  insertbackground="white", font=("Courier", 10), state="disabled")
+        self.ast_output.grid(row=0, column=0, sticky="nsew")
+        ast_scroll = tk.Scrollbar(ast_frame, command=self.ast_output.yview)
+        ast_scroll.grid(row=0, column=1, sticky="ns")
+        self.ast_output.config(yscrollcommand=ast_scroll.set)
+
+        # ---- 标签3：AST 可视化 ----
         self.ast_tab = self.result_tabs.add("AST 可视化")
         self.ast_canvas = tk.Canvas(self.ast_tab, bg="#262626")
         self.ast_canvas.pack(fill="both", expand=True, padx=10, pady=10)
@@ -80,13 +105,20 @@ class CompilerApp(ctk.CTk):
         with open("temp_test.rs", "w", encoding="utf-8") as f:
             f.write(code)
 
+        self.token_output.config(state="normal")
         self.token_output.delete("1.0", tk.END)
+        self.token_output.config(state="disabled")
+
+        self.ast_output.config(state="normal")
         self.ast_output.delete("1.0", tk.END)
+        self.ast_output.config(state="disabled")
+
         self.ast_canvas.delete("all")
 
         try:
             # 词法分析
             tokens = tokenize_file("temp_test.rs")
+            self.token_output.config(state="normal")
             for t in tokens:
                 self.token_output.insert("end", f"{t}\n")
             self.token_output.config(state="disabled")
@@ -95,6 +127,7 @@ class CompilerApp(ctk.CTk):
             parser = LR1Parser()
             ast = parser.parse(tokens)
 
+            self.ast_output.config(state="normal")
             self.ast_output.insert("end", str(ast))
             self.ast_output.config(state="disabled")
 
@@ -107,11 +140,9 @@ class CompilerApp(ctk.CTk):
             img = Image.open('ast_graph.png')
             self.original_image = img
 
-            # 自动缩放使其适应 canvas 初始尺寸
             canvas_width = self.ast_canvas.winfo_width()
             canvas_height = self.ast_canvas.winfo_height()
             if canvas_width == 1 or canvas_height == 1:
-                # 有些系统刚启动时可能 canvas 宽高为1，强制设定
                 canvas_width, canvas_height = 800, 600
 
             ratio = min(canvas_width / img.width, canvas_height / img.height)
@@ -124,7 +155,7 @@ class CompilerApp(ctk.CTk):
             self.ast_canvas.config(scrollregion=self.ast_canvas.bbox("all"))
 
         except Exception as e:
-            messagebox.showerror("分析错误", str(e))
+            messagebox.showerror("分析错误", traceback.format_exc())
 
     def start_move(self, event):
         self._drag_data["x"] = event.x
