@@ -105,7 +105,9 @@ def build_grammar() -> Grammar:
 
     # 5.x 循环 / 跳转（保留）
     G.add_prod('Stmt', ['while', 'Expr', 'Block'])
-    G.add_prod('Stmt', ['for', 'VariableInternal', 'in', 'Expr', '..', 'Expr', 'Block'])
+    G.add_prod('Stmt', ['for', 'VariableInternal', 'in', 'Iterable', 'Block'])
+    G.add_prod('Iterable', ['Expr', '..', 'Expr'])
+    G.add_prod('Iterable', ['Expr'])
     G.add_prod('Stmt', ['loop', 'Block'])
     G.add_prod('Stmt', ['break', ';'])
     G.add_prod('Stmt', ['continue', ';'])

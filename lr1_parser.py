@@ -313,13 +313,18 @@ class LR1Parser:
             # while Expr Block
             if rhs == ['while', 'Expr', 'Block']:
                 return WhileStmt(children[1], children[2])
-            # for VariableInternal in Expr .. Expr Block
-            if rhs == ['for','VariableInternal','in','Expr','..','Expr','Block']:
-                var      = children[1]
-                start    = children[3]
-                end      = children[5]
-                body_blk = children[6]
-                return ForStmt(var.name, var.mutable, start, end, body_blk)
+            if rhs == ['for', 'VariableInternal', 'in', 'Iterable', 'Block']:
+                var = children[1]
+                iterable = children[3]
+                body_blk = children[4]
+
+                # 如果 iterable 是 range 形式（通过上面 grammar 的 ['Expr', '..', 'Expr'] 规则构造）
+                if isinstance(iterable, tuple) and iterable[0] == 'range':
+                    start, end = iterable[1], iterable[2]
+                    return ForStmt(var.name, var.mutable, start, end, body_blk)
+
+                # 否则直接留给语义检查处理
+                return ForStmt(var.name, var.mutable, iterable, None, body_blk)
             # loop Block
             if rhs == ['loop', 'Block']:
                 return LoopStmt(children[1])
@@ -333,6 +338,11 @@ class LR1Parser:
             if rhs == ['Expr', ';']:
                 expr = children[0]
                 return ExprStmt(expr)
+
+        if lhs == 'Iterable' and rhs == ['Expr', '..', 'Expr']:
+            return ('range', children[0], children[2])
+        if lhs == 'Iterable' and rhs == ['Expr']:
+            return children[0]
 
         # Expr → comparisons or AddExpr
         if lhs == 'Expr':

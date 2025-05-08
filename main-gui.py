@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 from lr1_parser import LR1Parser
 from lexer import tokenize_file
 from PIL import Image, ImageTk
+from semantic_checker import run_semantic_checks
 import traceback
 
 class CompilerApp(ctk.CTk):
@@ -126,6 +127,11 @@ class CompilerApp(ctk.CTk):
             # 语法分析生成 AST
             parser = LR1Parser()
             ast = parser.parse(tokens)
+
+            semantic_errors = run_semantic_checks(ast)
+            if semantic_errors:
+                messagebox.showerror("语义错误", "\n".join(semantic_errors))
+                return
 
             self.ast_output.config(state="normal")
             self.ast_output.insert("end", str(ast))
