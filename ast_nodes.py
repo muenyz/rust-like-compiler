@@ -1,5 +1,5 @@
 # ast_nodes.py
-
+import html
 class ASTNode:
     """Base class for all AST nodes."""
     #pass
@@ -141,6 +141,10 @@ class VarDecl(Stmt):
     def _graphviz_label(self):
         mut_str = "mut " if self.mutable else ""
         type_str = f": {self.typ}" if self.typ else ""
+        if self.typ is not None:
+            type_str = f": {html.escape(str(self.typ))}"
+        else:
+            type_str = ""
         return f"<<B>VarDecl</B><BR/>{mut_str}{self.name}{type_str}>"
 
     def __init__(self, name, mutable, typ, init):
