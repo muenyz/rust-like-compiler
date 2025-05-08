@@ -36,7 +36,7 @@ def main():
         json.dump({
             "ACTION": action_json,
             "GOTO": goto_json
-        }, f, indent=2)
+        }, f, indent=2, ensure_ascii=False)
 
     print("Saved parse_tables_debug.json (human-readable ACTION/GOTO)")
 

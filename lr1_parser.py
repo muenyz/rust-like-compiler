@@ -401,8 +401,17 @@ class LR1Parser:
             if rhs == ['[', 'ExprList', ']']:
                 return ArrayLiteral(children[1])
             # ( ExprList )
-            if rhs == ['(', 'ExprList', ')']:
-                return TupleLiteral(children[1])
+                # 单元素元组 (Expr, )
+            if rhs == ['(', 'Expr', ',', ')']:
+                return TupleLiteral([children[1]])
+
+            # 多元素元组 (Expr, ExprList)
+            if rhs == ['(', 'Expr', ',', 'ExprList', ')']:
+                return TupleLiteral([children[1]] + children[3])
+
+            # 空元组 ()
+            if rhs == ['(', ')']:
+                return TupleLiteral([])
             if rhs == ['IDENT']:
                 return Ident(children[0].value)
 

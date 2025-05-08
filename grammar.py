@@ -115,12 +115,12 @@ def build_grammar() -> Grammar:
     G.add_prod('Primary', ['&', 'Primary'])
     G.add_prod('Primary', ['&', 'mut', 'Primary'])
 
-    # ---------- 7.1 表达式块 ----------  ★ 新增
+    # ---------- 7.1 表达式块 ----------
     G.add_prod('FuncExprBlock', ['{', 'FuncStmtList', '}'])
     G.add_prod('FuncStmtList', ['Stmt', 'FuncStmtList'])  # 多语句 + 表达式
-    G.add_prod('FuncStmtList', ['Stmt'])  # ★ 新增：仅语句（如 break 2;）
+    G.add_prod('FuncStmtList', ['Stmt'])
     G.add_prod('FuncStmtList', ['Expr'])  # 仅表达式
-    G.add_prod('Primary', ['FuncExprBlock'])                  # 作为 Primary 使用
+    G.add_prod('Primary', ['FuncExprBlock'])
 
     # ---------- 7.3 选择表达式 ----------  ★ 新增
     G.add_prod('Expr', ['SelectExpr'])  # Expr → 选择表达式
@@ -147,8 +147,14 @@ def build_grammar() -> Grammar:
     G.add_prod('Type', ['(', 'TypeList', ')'])
     G.add_prod('TypeList', ['Type'])
     G.add_prod('TypeList', ['Type', ',', 'TypeList'])
-    G.add_prod('Primary', ['(', ')'])
-    G.add_prod('Primary', ['(', 'ExprList', ')'])
+    G.add_prod('Primary', ['(', ')'])  # 空元组 ()
+    G.add_prod('Primary', ['(', 'Expr', ')'])  # 括号表达式
+    G.add_prod('Primary', ['(', 'Expr', ',', ')'])  # 单元素元组 (1,)
+    G.add_prod('Primary', ['(', 'Expr', ',', 'ExprList', ')'])  # 多元素元组 (1, 2, 3)
+
+    # ExprList 维持不变，用于多元素
+    G.add_prod('ExprList', ['Expr'])
+    G.add_prod('ExprList', ['Expr', ',', 'ExprList'])
     G.add_prod('Assignable', ['Primary', '.', 'NUMBER'])
 
     # &T / &mut T
