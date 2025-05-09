@@ -29,7 +29,7 @@ class LR1Parser:
         self.ACTION  = ACTION
         self.GOTO    = GOTO
 
-    def parse(self, tokens):
+    def parse(self, tokens, trace_output=None):
         state_stack  = [0]
         symbol_stack = []
         idx = 0
@@ -56,8 +56,11 @@ class LR1Parser:
                 symbol_stack.append(tok)
                 idx += 1
 
+
             elif cmd == 'reduce':
                 prod = arg
+                if trace_output is not None:
+                    trace_output.append(f"reduce {prod.lhs} → {' '.join(prod.rhs) if prod.rhs else 'ε'}")
                 n = len(prod.rhs)
                 # print(f"reduce {prod}   n={n}   state={state_stack[-1]}  look={look!r}")
 
