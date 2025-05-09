@@ -57,6 +57,12 @@ class Program(ASTNode):
     def __init__(self, items):
         self.items = items
 
+    def __str__(self):
+        return 'Program([\n  ' + ',\n  '.join(str(item).replace('\n', '\n  ') for item in self.items) + '\n])'
+
+    def __repr__(self):
+        return self.__str__()
+
 class FuncDecl(ASTNode):
     def _graphviz_label(self):
         return f"FuncDecl\\n{self.name}"

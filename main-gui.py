@@ -79,18 +79,6 @@ class CompilerApp(ctk.CTk):
         token_scroll.grid(row=0, column=1, sticky="ns")
         self.token_output.config(yscrollcommand=token_scroll.set)
 
-        self.ast_raw_tab = self.result_tabs.add("语法分析")
-        ast_frame = tk.Frame(self.ast_raw_tab, bg="#262626")
-        ast_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        ast_frame.grid_rowconfigure(0, weight=1)
-        ast_frame.grid_columnconfigure(0, weight=1)
-
-        self.ast_output = tk.Text(ast_frame, bg="#262626", fg="white", insertbackground="white", font=("Courier", 10), state="disabled")
-        self.ast_output.grid(row=0, column=0, sticky="nsew")
-        ast_scroll = tk.Scrollbar(ast_frame, command=self.ast_output.yview)
-        ast_scroll.grid(row=0, column=1, sticky="ns")
-        self.ast_output.config(yscrollcommand=ast_scroll.set)
-
         self.ast_tab = self.result_tabs.add("AST 可视化")
         self.ast_canvas = tk.Canvas(self.ast_tab, bg="#262626")
         self.ast_canvas.pack(fill="both", expand=True, padx=10, pady=10)
@@ -179,10 +167,6 @@ class CompilerApp(ctk.CTk):
         self.token_output.delete("1.0", tk.END)
         self.token_output.config(state="disabled")
 
-        self.ast_output.config(state="normal")
-        self.ast_output.delete("1.0", tk.END)
-        self.ast_output.config(state="disabled")
-
         self.reduction_output.config(state="normal")
         self.reduction_output.delete("1.0", tk.END)
         self.reduction_output.config(state="disabled")
@@ -197,7 +181,7 @@ class CompilerApp(ctk.CTk):
             self.token_output.config(state="disabled")
 
             parser = LR1Parser()
-            parser.reduction_trace = []  # ← 存放归约日志
+            parser.reduction_trace = []
             ast = parser.parse(tokens, trace_output=parser.reduction_trace)
 
             self.reduction_output.config(state="normal")
@@ -209,10 +193,6 @@ class CompilerApp(ctk.CTk):
             if semantic_errors:
                 messagebox.showerror("语义错误", "\n".join(semantic_errors))
                 return
-
-            self.ast_output.config(state="normal")
-            self.ast_output.insert("end", str(ast))
-            self.ast_output.config(state="disabled")
 
             dot = ast.graphviz()
             dot.attr(rankdir='TB')
