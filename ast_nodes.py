@@ -93,7 +93,11 @@ class FuncDecl(ASTNode):
 class Param(ASTNode):
     def _graphviz_label(self):
         mut = "mut " if self.mutable else ""
-        return f"Param\\n{mut}{self.name}: {self.typ}"
+        if isinstance(self.typ, ASTNode):
+            typ_str = self.typ._graphviz_label().replace("\\n", " ")
+        else:
+            typ_str = str(self.typ)
+        return f"Param\\n{mut}{self.name}: {typ_str}"
 
     def __init__(self, name, mutable, typ):
         self.name = name
