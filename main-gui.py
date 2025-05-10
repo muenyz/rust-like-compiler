@@ -6,6 +6,7 @@ from lexer import tokenize_file, Lexer, TokenKind
 from PIL import Image, ImageTk
 from semantic_checker import run_semantic_checks
 import traceback
+from tkinter import ttk
 
 TOKEN_COLORS = {
     'KEYWORD': '#cc7832',
@@ -73,11 +74,17 @@ class CompilerApp(ctk.CTk):
         token_frame.grid_rowconfigure(0, weight=1)
         token_frame.grid_columnconfigure(0, weight=1)
 
-        self.token_output = tk.Text(token_frame, bg="#262626", fg="white", insertbackground="white", font=("Courier", 10), state="disabled")
+        self.token_output = tk.Text(token_frame, bg="#262626", fg="white", insertbackground="white",
+                                    font=("Courier", 10), state="disabled", wrap="none")  # ← 加 wrap="none" 禁用自动换行
         self.token_output.grid(row=0, column=0, sticky="nsew")
-        token_scroll = tk.Scrollbar(token_frame, command=self.token_output.yview)
-        token_scroll.grid(row=0, column=1, sticky="ns")
-        self.token_output.config(yscrollcommand=token_scroll.set)
+
+        token_scroll_y = tk.Scrollbar(token_frame, command=self.token_output.yview)
+        token_scroll_y.grid(row=0, column=1, sticky="ns")
+
+        token_scroll_x = tk.Scrollbar(token_frame, orient="horizontal", command=self.token_output.xview)
+        token_scroll_x.grid(row=1, column=0, sticky="ew")
+
+        self.token_output.config(yscrollcommand=token_scroll_y.set, xscrollcommand=token_scroll_x.set)
 
         self.ast_tab = self.result_tabs.add("AST 可视化")
         self.ast_canvas = tk.Canvas(self.ast_tab, bg="#262626")
@@ -94,12 +101,27 @@ class CompilerApp(ctk.CTk):
         reduction_frame.grid_rowconfigure(0, weight=1)
         reduction_frame.grid_columnconfigure(0, weight=1)
 
-        self.reduction_output = tk.Text(reduction_frame, bg="#262626", fg="white",
-                                        insertbackground="white", font=("Courier", 10), state="disabled")
-        self.reduction_output.grid(row=0, column=0, sticky="nsew")
-        reduction_scroll = tk.Scrollbar(reduction_frame, command=self.reduction_output.yview)
-        reduction_scroll.grid(row=0, column=1, sticky="ns")
-        self.reduction_output.config(yscrollcommand=reduction_scroll.set)
+        self.reduction_table = ttk.Treeview(
+            reduction_frame,
+            columns=("state",  "input", "action"),
+            show="headings"
+        )
+        self.reduction_table.heading("state", text="状态栈")
+        self.reduction_table.heading("input", text="输入串")
+        self.reduction_table.heading("action", text="动作")
+        self.reduction_table.column("state", width=140)
+        self.reduction_table.column("input", width=400)  # 可以加宽一些
+        self.reduction_table.column("action", width=180)
+        self.reduction_table.grid(row=0, column=0, sticky="nsew")
+
+        scroll_y = tk.Scrollbar(reduction_frame, command=self.reduction_table.yview)
+        scroll_y.grid(row=0, column=1, sticky="ns")
+
+        scroll_x = tk.Scrollbar(reduction_frame, orient="horizontal", command=self.reduction_table.xview)
+        scroll_x.grid(row=1, column=0, sticky="ew")
+
+        self.reduction_table.config(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
 
         for kind in TokenKind:
             self.code_input.tag_config(kind.name, foreground=TOKEN_COLORS.get(kind.name, "white"))
@@ -167,9 +189,7 @@ class CompilerApp(ctk.CTk):
         self.token_output.delete("1.0", tk.END)
         self.token_output.config(state="disabled")
 
-        self.reduction_output.config(state="normal")
-        self.reduction_output.delete("1.0", tk.END)
-        self.reduction_output.config(state="disabled")
+        self.reduction_table.delete(*self.reduction_table.get_children())
 
         self.ast_canvas.delete("all")
 
@@ -184,10 +204,14 @@ class CompilerApp(ctk.CTk):
             parser.reduction_trace = []
             ast = parser.parse(tokens, trace_output=parser.reduction_trace)
 
-            self.reduction_output.config(state="normal")
-            for line in parser.reduction_trace:
-                self.reduction_output.insert("end", line + "\n")
-            self.reduction_output.config(state="disabled")
+            for row in parser.reduction_trace:
+                self.reduction_table.insert("", "end", values=(
+                    ",".join(map(str, row["state"])),
+                    " ".join(row["input"]),
+                    row["action"]
+                ))
+
+            self.reduction_table.update_idletasks()
 
             semantic_errors = run_semantic_checks(ast)
             if semantic_errors:

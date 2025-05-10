@@ -30,15 +30,25 @@ class LR1Parser:
         self.GOTO    = GOTO
 
     def parse(self, tokens, trace_output=None):
-        state_stack  = [0]
+        def _symbol_repr(s):
+            # print(f"type: {type(s)}, isinstance(s, ASTNode): {isinstance(s, ASTNode)}")
+            if isinstance(s, Token):
+                return f"{s.kind.name}({s.value})"
+            elif isinstance(s, ASTNode):
+                return s.__class__.__name__
+            elif isinstance(s, tuple):
+                return f"tuple({', '.join(str(x) for x in s)})"
+            else:
+                return str(s)
+
+        state_stack = [0]
         symbol_stack = []
         idx = 0
 
         while True:
-            # print(idx)
             state = state_stack[-1]
-            tok   = tokens[idx]
-            # 把 IDENT/NUMBER 映射到文法终结符名
+            tok = tokens[idx]
+
             if tok.kind == TokenKind.IDENT:
                 look = 'IDENT'
             elif tok.kind == TokenKind.NUMBER:
@@ -51,42 +61,58 @@ class LR1Parser:
                 raise SyntaxError(f"Unexpected token {tok!r} (lookahead={look}) in state {state}")
 
             cmd, arg = action
+
             if cmd == 'shift':
+                if trace_output is not None:
+                    trace_output.append({
+                        'state': list(state_stack),
+                        'symbol': [_symbol_repr(s) for s in symbol_stack],
+                        'input': [str(t.value) for t in tokens[idx:]],
+                        'action': f'shift {arg}'
+                    })
                 state_stack.append(arg)
                 symbol_stack.append(tok)
                 idx += 1
 
-
             elif cmd == 'reduce':
                 prod = arg
                 if trace_output is not None:
-                    trace_output.append(f"reduce {prod.lhs} → {' '.join(prod.rhs) if prod.rhs else 'ε'}")
-                n = len(prod.rhs)
-                # print(f"reduce {prod}   n={n}   state={state_stack[-1]}  look={look!r}")
+                    rhs_str = ' '.join(prod.rhs) if prod.rhs else 'ε'
+                    trace_output.append({
+                        'state': list(state_stack),
+                        'symbol': [_symbol_repr(s) for s in symbol_stack],
+                        'input': [str(t.value) for t in tokens[idx:]],
+                        'action': f'reduce {prod.lhs} → {rhs_str}'
+                    })
 
-                # -------- 死循环防御 --------
-                if n == 0:  # ε‑产生式
+                n = len(prod.rhs)
+
+                if n == 0:
                     goto_state = self.GOTO[state_stack[-1]].get(prod.lhs)
                     if goto_state == state_stack[-1]:
                         raise RuntimeError(
                             f"infinite ε‑reduce on {prod} with lookahead {look}"
                         )
-                # ------------------------------
 
-                # 1) 弹栈
                 children = [symbol_stack.pop() for _ in range(n)]
                 children.reverse()
                 for _ in range(n):
                     state_stack.pop()
-                # 2) 构建节点
+
                 node = self._make_node(prod, children)
                 symbol_stack.append(node)
-                # 3) goto
+
                 goto_state = self.GOTO[state_stack[-1]][prod.lhs]
                 state_stack.append(goto_state)
 
-            else:  # accept
-                # 解析成功，顶栈即根节点
+            elif cmd == 'accept':
+                if trace_output is not None:
+                    trace_output.append({
+                        'state': list(state_stack),
+                        'symbol': [_symbol_repr(s) for s in symbol_stack],
+                        'input': [],
+                        'action': 'accept'
+                    })
                 return symbol_stack[-1]
 
     def _make_node(self, prod, children):
@@ -499,6 +525,4 @@ if __name__ == '__main__':
 
     dot = ast.graphviz()
     dot.format = 'png'
-    dot.render('ast', view=True)  # 生成ast.png并自动打开
-
-
+    dot.render('ast', view=True)
