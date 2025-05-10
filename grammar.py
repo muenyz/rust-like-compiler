@@ -72,7 +72,6 @@ def build_grammar() -> Grammar:
     G.add_prod('Stmt', ['let', 'VariableInternal', '=', 'Expr', ';'])
 
     # 2.x 允许 Primary 做左值
-    # G.add_prod('Assignable', ['Primary'])              # 保留单向
     G.add_prod('Primary', ['Assignable'])
     G.add_prod('Assignable', ['*', 'Primary'])
 
@@ -92,7 +91,6 @@ def build_grammar() -> Grammar:
     G.add_prod('Primary', ['IDENT', '(', 'ArgList', ')'])
     G.add_prod('Primary', ['(', 'Expr', ')'])
     G.add_prod('Primary', ['NUMBER'])
-    # ★ 修改：删除反向别名 Primary→Assignable
     G.add_prod('ArgList', [])
     G.add_prod('ArgList', ['Expr'])
     G.add_prod('ArgList', ['Expr', ',', 'ArgList'])
@@ -167,7 +165,7 @@ def build_grammar() -> Grammar:
     G.compute_terminals()
     return G
 
-# ─────────── FIRST / closure / goto (保持原实现) ────────────
+# ─────────── FIRST / closure / goto ────────────
 class Item:
     def __init__(self, prod, dot, la):
         self.prod, self.dot, self.la = prod, dot, la

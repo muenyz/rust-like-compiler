@@ -131,6 +131,8 @@ class SemanticChecker:
             name = expr.name
             typ = self.lookup(name)
             if typ is None:
+                if name in self.current_env():
+                    raise SemanticError(f"变量 `{name}` 没有类型")
                 raise SemanticError(f"使用了未声明的变量 `{name}`")
             return typ
         if isinstance(expr, BinaryOp):
