@@ -444,17 +444,16 @@ class SemanticChecker:
         then_type=self.check(node.then_body)
 
         # 3.检查else
-        else_type=self.check(node.else_body)
+        else_type=VOID
+        if node.else_body is not None:
+            self.check(node.else_body)
 
-        if not then_type== else_type:
-            # 如果then和else的类型不一致，抛出错误
-            raise SemanticError(
-                f"if 语句的 then 和 else 分支类型不匹配：'{then_type}' vs '{else_type}'",
-                node.line, node.col)
-
-        # 4.返回类型
-        node.computed_type=then_type
-        return then_type
+        if then_type == else_type:
+            node.computed_type = then_type
+            return then_type
+        else:
+            node.computed_type = VOID
+            return VOID
 
     def check_Block(self, node: Block)->Type:
         self.enter_scope()
