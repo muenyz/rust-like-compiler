@@ -500,6 +500,8 @@ class LR1Parser:
                 return TupleLiteral([],children[0].line, children[0].col)
             if rhs == ['(', 'TypeList', ')']:
                 return TupleLiteral(children[1],children[0].line, children[0].col)
+            if rhs == ['(', 'Type', ',', ')']:
+                return TupleLiteral([children[1]], children[0].line, children[0].col)
 
         if lhs == 'TypeList':
             if rhs == ['Type']:

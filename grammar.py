@@ -144,6 +144,7 @@ def build_grammar() -> Grammar:
 
     # 9.1 元组
     G.add_prod('Type', ['(', ')'])
+    G.add_prod('Type', ['(', 'Type', ',', ')'])
     G.add_prod('Type', ['(', 'TypeList', ')'])
     G.add_prod('TypeList', ['Type'])
     G.add_prod('TypeList', ['Type', ',', 'TypeList'])
@@ -253,14 +254,29 @@ def build_parse_table(C, G, first):
     ACTION, GOTO = defaultdict(dict), defaultdict(dict)
     for i,I in enumerate(C):
         for it in I:
+            # REDUCE
+            if it.dot == len(it.prod.rhs):
+                if it.prod.lhs!=G.start:
+                    if it.la not in ACTION[i]:
+                        ACTION[i][it.la] = ('reduce', it.prod)
+                    else:
+                        print(f"冲突在 state {i}, lookahead {it.la}: 已存在 {ACTION[i][it.la]}，新动作为 ('reduce', {it.prod})")
+                elif it.prod.lhs==G.start:
+                    ACTION[i]['$'] = ('accept', None)
+
+            # SHIFT
             a = it.next_symbol()
             if a in G.terminals:
-                j = C.index(goto(I,a,G,first))
-                ACTION[i].setdefault(a, ('shift', j))            # ★ 修改 shift 优先
-            if it.dot == len(it.prod.rhs) and it.prod.lhs != G.start:
-                ACTION[i].setdefault(it.la, ('reduce', it.prod)) # ★ reduce 若无 shift
-            if it.dot == len(it.prod.rhs) and it.prod.lhs == G.start:
-                ACTION[i]['$'] = ('accept', None)
+                j = C.index(goto(I, a, G, first))
+                ACTION[i][a] = ('shift', j)
+            # a = it.next_symbol()
+            # if a in G.terminals:
+            #     j = C.index(goto(I,a,G,first))
+            #     ACTION[i].setdefault(a, ('shift', j))            # ★ 修改 shift 优先
+            # if it.dot == len(it.prod.rhs) and it.prod.lhs != G.start:
+            #     ACTION[i].setdefault(it.la, ('reduce', it.prod)) # ★ reduce 若无 shift
+            # if it.dot == len(it.prod.rhs) and it.prod.lhs == G.start:
+            #     ACTION[i]['$'] = ('accept', None)
         for A in G.nonterminals:
             J = goto(I,A,G,first)
             if J:

@@ -160,7 +160,6 @@ class SemanticChecker:
         if isinstance(type_node, TupleLiteral):
             member_types = [self._resolve_type(t) for t in type_node.elements]
             return TupleType(member_types)
-
         raise SemanticError(f"未知的类型注解：'{type_node}'")
 
     # --- Visitor Mode ---
@@ -306,32 +305,65 @@ class SemanticChecker:
 
     def check_AssignStmt(self,node:AssignStmt):
         # 1.特殊处理left，不check
-        if not isinstance(node.target,Ident):
-            raise SemanticError(f"暂时只支持简单变量", node.line, node.col)
+        if isinstance(node.target,Ident):
+            target_name=node.target.name
+            symbol = self.lookup_symbol(target_name)
+            if not symbol:
+                raise SemanticError(f"未声明的变量 '{target_name}'", node.line, node.col)
+            if not symbol.is_mutable:
+                if symbol.is_initialized:
+                    raise SemanticError(f"不可变变量 '{target_name}' 不能被二次赋值", node.line, node.col)
 
-        target_name=node.target.name
-        symbol = self.lookup_symbol(target_name)
-        if not symbol:
-            raise SemanticError(f"未声明的变量 '{target_name}'", node.line, node.col)
-        if not symbol.is_mutable:
-            if symbol.is_initialized:
-                raise SemanticError(f"不可变变量 '{target_name}' 不能被二次赋值", node.line, node.col)
+            # 2.检查right
+            expr_type=self.check(node.expr)
 
-        # 2.检查right
-        expr_type=self.check(node.expr)
+            # 3.类型匹配
+            if not symbol.type == expr_type:
+                raise SemanticError(
+                    f"类型不匹配：变量 '{target_name}' 的类型是 '{symbol.type}'，但赋值表达式的类型是 '{expr_type}'",
+                    node.line, node.col)
 
-        # 3.类型匹配
-        if not symbol.type == expr_type:
+            # 4.更新符号状态
+            symbol.is_initialized = True
+
+            # 5.注解AST节点
+            node.target.symbol_info = symbol
+            node.target.computed_type = symbol.type
+        elif isinstance(node.target,IndexExpr):
+            target_element_type=self.check(node.target)
+
+            if isinstance(node.target.base,Ident):
+                base_symbol=self.lookup_symbol(node.target.base.name)
+                if base_symbol and not base_symbol.is_mutable:
+                    raise SemanticError(
+                        f"不可变数组 '{base_symbol.name}' 不能被修改",
+                        node.line, node.col)
+
+            rhs_type=self.check(node.expr)
+            if not target_element_type == rhs_type:
+                raise SemanticError(
+                    f"数组元素类型不匹配：期望 '{target_element_type}'，但实际是 '{rhs_type}'",
+                    node.line, node.col)
+        elif isinstance(node.target,MemberExpr):
+            # 处理元组成员赋值
+            member_type = self.check(node.target)
+
+            if isinstance(node.target.base, Ident):
+                base_symbol = self.lookup_symbol(node.target.base.name)
+                if base_symbol and not base_symbol.is_mutable:
+                    raise SemanticError(
+                        f"不可变元组 '{base_symbol.name}' 不能被修改",
+                        node.line, node.col)
+
+            rhs_type = self.check(node.expr)
+            if not member_type == rhs_type:
+                raise SemanticError(
+                    f"元组成员类型不匹配：期望 '{member_type}'，但实际是 '{rhs_type}'",
+                    node.line, node.col)
+        else:
             raise SemanticError(
-                f"类型不匹配：变量 '{target_name}' 的类型是 '{symbol.type}'，但赋值表达式的类型是 '{expr_type}'",
+                f"不支持的赋值目标： '{type(node.target).__name__}'",
                 node.line, node.col)
-
-        # 4.更新符号状态
-        symbol.is_initialized = True
-
-        # 5.注解AST节点
-        node.target.symbol_info = symbol
-        node.target.computed_type = symbol.type
 
     def check_FuncCall(self, node: FuncCall)->Type:
         # 1.查找函数符号
@@ -601,6 +633,79 @@ class SemanticChecker:
         node.computed_type = result_type
         return result_type
 
+    def check_ArrayLiteral(self,node:ArrayLiteral)->Type:
+        if not node.elements:
+            #空数组不支持
+            return ArrayType(ERROR_TYPE, 0)
+
+        # 1.检查元素类型
+        first_type = self.check(node.elements[0])
+        for elem in node.elements[1:]:
+            elem_type = self.check(elem)
+            if elem_type != first_type:
+                raise SemanticError(
+                    f"数组元素类型不一致：第一个元素是 '{first_type}'，但后续元素是 '{elem_type}'",
+                    node.line, node.col)
+
+        # 2.构造数组类型
+        array_type = ArrayType(first_type, len(node.elements))
+        node.computed_type = array_type
+        return array_type
+
+    def check_IndexExpr(self,node:IndexExpr)->Type:
+        # 1.检查Base
+        base_type = self.check(node.base)
+        if not isinstance(base_type, ArrayType):
+            raise SemanticError(f"索引操作只能用于数组类型，但实际是 '{base_type}'", node.line, node.col)
+
+        # 2.检查idx
+        index_type = self.check(node.index)
+        if not (index_type == I32):
+            raise SemanticError(f"索引操作的索引必须是 'i32' 类型，但实际是 '{index_type}'", node.line, node.col)
+
+        #检查数组越界
+        if isinstance(node.index, NumberLit):
+            index_value = node.index.value
+            if not (0 <= index_value < base_type.size):
+                raise SemanticError(
+                    f"数组索引越界：索引 {index_value} 超出数组范围 [0, {base_type.size - 1}]",
+                    node.line, node.col)
+
+
+        # 3.返回元素类型
+        element_type = base_type.element_type
+        node.computed_type = element_type
+        return element_type
+
+
+    def check_TupleLiteral(self, node: TupleLiteral) -> Type:
+        # 1.收集所有元素的类型
+        member_types = []
+        for elem in node.elements:
+            elem_type = self.check(elem)
+            member_types.append(elem_type)
+
+        # 2.构造元组类型
+        tuple_type = TupleType(member_types)
+        node.computed_type = tuple_type
+        return tuple_type
+
+    def check_MemberExpr(self,node:MemberExpr)->Type:
+        # 1.检查base
+        base_type = self.check(node.base)
+        if not isinstance(base_type,TupleType):
+            raise SemanticError(f"成员访问只能用于元组类型，但实际是 '{base_type}'", node.line, node.col)
+        # 2.检查成员索引
+        index = node.field
+
+        if not (0 <= index < len(base_type.member_types)):
+            raise SemanticError(
+                f"元组索引越界：索引 {index} 超出元组范围 [0, {len(base_type.member_types) - 1}]",
+                node.line, node.col)
+        # 3.返回成员类型
+        member_type = base_type.member_types[index]
+        node.computed_type = member_type
+        return member_type
 
 
 if __name__ == "__main__":
