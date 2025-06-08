@@ -127,14 +127,14 @@ class LR1Parser:
         # Block → { StmtList }
         if lhs == 'Block' and rhs == ['{', 'StmtList', '}']:
             stmt_list = children[1]  # children = ['{', StmtList, '}']
-            return Block(stmt_list)
+            return Block(stmt_list,children[0].line, children[0].col)
 
         # Block → { Stmt StmtList }
         if lhs == 'Block' and rhs == ['{', 'Stmt', 'StmtList', '}']:
-            return Block([children[1]] + children[2])
+            return Block([children[1]] + children[2],children[0].line, children[0].col)
 
         if lhs == 'Block' and rhs == ['{', '}']:
-            return Block([])
+            return Block([], children[0].line, children[0].col)
 
         # ② 语句串 ----------------------------------------------------------
         # if lhs == 'StmtList':
@@ -155,17 +155,20 @@ class LR1Parser:
         # VariableInternal -> mut IDENT
         if lhs == 'VariableInternal' and rhs == ['mut', 'IDENT']:
             ident_tok = children[1]  # Token of kind IDENT
-            return VarBinding(ident_tok.value, mutable=True)
+            return VarBinding(ident_tok.value, True,children[0].line, children[0].col)
 
         # VariableInternal -> IDENT
         if lhs == 'VariableInternal' and rhs == ['IDENT']:
             ident_tok = children[0]
-            return VarBinding(ident_tok.value, mutable=False)
+            return VarBinding(ident_tok.value, False,children[0].line, children[0].col)
 
         # Program → DeclList
         if lhs == 'Program' and rhs == ['DeclList']:
             decls = children[0]
-            return Program(decls)
+            first_decl = decls[0] if isinstance(decls, list) and decls else None
+            line = first_decl.line if first_decl else 1
+            col = first_decl.col if first_decl else 1
+            return Program(decls, line, col)
 
         # DeclList → ε
         if lhs == 'DeclList' and not rhs:
@@ -183,30 +186,33 @@ class LR1Parser:
         # FnDecl → FnHead Block
         if lhs == 'FnDecl' and rhs == ['FnHead', 'Block']:
             # print(f"!!! DEBUG FnDecl children[0]: {children[0]}")
-            name, params, ret = children[0]
+            name, params, ret,line, col = children[0]
             body = children[1]
-            return FuncDecl(name, params, ret, body)
+            # print(children[0])
+            return FuncDecl(name, params, ret, body,line,col)
 
         # FnDecl → FnHead FuncExprBlock
         if lhs == 'FnDecl' and rhs == ['FnHead', 'FuncExprBlock']:
-            name, params, ret = children[0]
+            name, params, ret,line,col = children[0]
             body = children[1]
-            return FuncDecl(name, params, ret, body)
+            return FuncDecl(name, params, ret, body,line,col)
 
         # FnHead → fn IDENT ( ParamList ) [-> Type]
         if lhs == 'FnHead':
             # print(f"!!! DEBUG: FnHead match {rhs}")
             # 带返回类型
+            fn_token = children[0]
             if rhs == ['fn', 'IDENT', '(', 'ParamList', ')', '->', 'Type']:
                 name_tok = children[1]
                 plist    = children[3]
                 typ      = children[6]
-                return (name_tok.value, plist, typ)
+
+                return (name_tok.value, plist, typ, fn_token.line, fn_token.col)
             # 无返回类型
             if rhs == ['fn', 'IDENT', '(', 'ParamList', ')']:
                 name_tok = children[1]
                 plist    = children[3]
-                return (name_tok.value, plist, None)
+                return (name_tok.value, plist, None, fn_token.line, fn_token.col)
 
         # ParamList 相关
         if lhs == 'ParamList':
@@ -217,47 +223,55 @@ class LR1Parser:
             if rhs == ['Param', ',', 'ParamList']:
                 return [children[0]] + children[2]
 
+        if lhs=='ArgList':
+            if not rhs:
+                return []
+            if rhs == ['Expr']:
+                return [children[0]]
+            if rhs == ['Expr', ',', 'ArgList']:
+                return [children[0]] + children[2]
+
         # Param → VariableInternal : Type
         if lhs == 'Param' and rhs == ['VariableInternal', ':', 'Type']:
             var, typ = children[0], children[2]
-            return Param(var.name, var.mutable, typ)
+            return Param(var.name, var.mutable, typ,children[0].line, children[0].col)
 
         # ReturnStmt
         if lhs == 'ReturnStmt':
             if rhs == ['return', ';']:
                 print("!!! building ReturnStmt(None)")
-                return ReturnStmt(None)
+                return ReturnStmt(None,children[0].line, children[0].col)
             if rhs == ['return', 'Expr', ';']:
-                return ReturnStmt(children[1])
+                return ReturnStmt(children[1],children[0].line, children[0].col)
 
         # SelectExpr → if Expr FuncExprBlock else FuncExprBlock
         if lhs == 'SelectExpr':
             cond, then_blk, else_blk = children[1], children[2], children[4]
-            return IfStmt(cond, then_blk, else_blk)  # 复用现有 IfStmt AST
+            return IfStmt(cond, then_blk, else_blk,children[0].line, children[0].col)  # 复用现有 IfStmt AST
 
         # LoopExpr → loop FuncExprBlock
         if lhs == 'LoopExpr':
             body = children[1]
-            return LoopStmt(body)  # 或自定义 LoopExpr 节点
+            return LoopStmt(body,children[0].line, children[0].col)  # 或自定义 LoopExpr 节点
 
 
         elif lhs == 'FuncExprBlock':
             stmts = children[1]
             if not isinstance(stmts, list):
-                stmts = [ExprStmt(stmts)]
-            elif stmts and isinstance(stmts[-1], (NumberLit, Ident, BinaryOp, FuncCall, IndexExpr, MemberExpr)):
-                last = stmts.pop()
-                stmts.append(ReturnStmt(last))
-            return Block(stmts)
+                stmts = [ExprStmt(stmts, stmts.line, stmts.col)]
+            # elif stmts and isinstance(stmts[-1], (NumberLit, Ident, BinaryOp, FuncCall, IndexExpr, MemberExpr)):
+            #     last = stmts.pop()
+            #     stmts.append(ReturnStmt(last,last.line, last.col))
+            return Block(stmts,children[0].line, children[0].col)
 
         elif lhs == 'Block':
             # 普通 Block 不自动包裹 ReturnStmt（避免 main 中的问题）
             stmts = children[1]
             if not isinstance(stmts, list):
-                stmts = [ExprStmt(stmts)]
+                stmts = [ExprStmt(stmts,children[0].line, children[0].col)]
             for i, stmt in enumerate(stmts):
                 print(f"[Block] stmt[{i}] = {stmt}")
-            return Block(stmts)
+            return Block(stmts,children[0].line, children[0].col)
 
         # break Expr ;
         # if lhs == 'Stmt' and rhs == ['break', 'Expr', ';']:
@@ -265,19 +279,16 @@ class LR1Parser:
         if lhs == 'FuncStmtList':
             if rhs == ['Stmt']:
                 stmt = children[0]
-                if isinstance(stmt, Expr):
-                    stmt = ReturnStmt(stmt)
                 return [stmt]
 
             if rhs == ['Stmt', 'FuncStmtList']:
-                first = children[0]
-                rest = children[1]
-                if not isinstance(rest, list):
-                    rest = [rest]
-                if rest and isinstance(rest[-1], Expr):
-                    last = rest.pop()
-                    rest.append(ReturnStmt(last))
-                return [first] + rest
+                first_stmt = children[0]
+
+                rest_list = children[1]
+                return [first_stmt] + rest_list
+
+            if rhs == ['Expr']:
+                return [children[0]]
 
         # 变量声明与赋值
         if lhs == 'Stmt':
@@ -290,22 +301,22 @@ class LR1Parser:
             if rhs == ['ReturnStmt']:
                 return children[0]
             if rhs == ['return', ';']:
-                return ReturnStmt(None)
+                return ReturnStmt(None,children[0].line, children[0].col)
             if rhs == ['return', 'Expr', ';']:
-                return ReturnStmt(children[1])
+                return ReturnStmt(children[1],children[0].line, children[0].col)
 
 
             # break Expr ;
             if rhs == ['break', 'Expr', ';']:
                 expr = children[1]
-                return BreakStmt(expr)
+                return BreakStmt(expr,children[0].line, children[0].col)
             # let VariableInternal : Type = Expr ;
             if rhs == ['let', 'VariableInternal', '=', 'Expr', ';']:
                 var = children[1]
                 expr = children[3]
                 if isinstance(expr, ExprStmt):
                     expr = expr.expr
-                return VarDecl(var.name, var.mutable, None, expr)
+                return VarDecl(var.name, var.mutable, None, expr,children[0].line, children[0].col)
 
             # let VariableInternal : Type = Expr ;
             if rhs == ['let', 'VariableInternal', ':', 'Type', '=', 'Expr', ';']:
@@ -314,16 +325,16 @@ class LR1Parser:
                 expr = children[5]
                 if isinstance(expr, ExprStmt):
                     expr = expr.expr
-                return VarDecl(var.name, var.mutable, typ, expr)
+                return VarDecl(var.name, var.mutable, typ, expr,children[0].line, children[0].col)
             # let VariableInternal : Type ;
             if rhs == ['let', 'VariableInternal', ':', 'Type', ';']:
                 var = children[1]
                 typ = children[3]
-                return VarDecl(var.name, var.mutable, typ, None)
+                return VarDecl(var.name, var.mutable, typ, None,children[0].line, children[0].col)
             # let VariableInternal ;
             if rhs == ['let', 'VariableInternal', ';']:
                 var = children[1]
-                return VarDecl(var.name, var.mutable, None, None)
+                return VarDecl(var.name, var.mutable, None, None,children[0].line, children[0].col)
             # Assignable = Expr ;
             if rhs == ['Assignable', '=', 'Expr', ';']:
                 target = children[0]
@@ -332,16 +343,16 @@ class LR1Parser:
                     expr = expr.expr
                 if isinstance(target, ExprStmt):  # <<< 需要加这句
                     target = target.expr
-                return AssignStmt(target, expr)
+                return AssignStmt(target, expr,children[0].line, children[0].col)
             # if Expr Block ElsePart
             if rhs == ['if', 'Expr', 'Block', 'ElsePart']:
                 cond = children[1]
                 then_blk = children[2]
                 else_blk = children[3]
-                return IfStmt(cond, then_blk, else_blk)
+                return IfStmt(cond, then_blk, else_blk,children[0].line, children[0].col)
             # while Expr Block
             if rhs == ['while', 'Expr', 'Block']:
-                return WhileStmt(children[1], children[2])
+                return WhileStmt(children[1], children[2],children[0].line, children[0].col)
             if rhs == ['for', 'VariableInternal', 'in', 'Iterable', 'Block']:
                 var = children[1]
                 iterable = children[3]
@@ -350,23 +361,23 @@ class LR1Parser:
                 # 如果 iterable 是 range 形式（通过上面 grammar 的 ['Expr', '..', 'Expr'] 规则构造）
                 if isinstance(iterable, tuple) and iterable[0] == 'range':
                     start, end = iterable[1], iterable[2]
-                    return ForStmt(var.name, var.mutable, start, end, body_blk)
+                    return ForStmt(var.name, var.mutable, start, end, body_blk,children[0].line, children[0].col)
 
                 # 否则直接留给语义检查处理
-                return ForStmt(var.name, var.mutable, iterable, None, body_blk)
+                return ForStmt(var.name, var.mutable, iterable, None, body_blk,children[0].line, children[0].col)
             # loop Block
             if rhs == ['loop', 'Block']:
-                return LoopStmt(children[1])
+                return LoopStmt(children[1],children[0].line, children[0].col)
             # break ;
             if rhs == ['break', ';']:
-                return BreakStmt()
+                return BreakStmt(None,children[0].line, children[0].col)
             # continue ;
             if rhs == ['continue', ';']:
-                return ContinueStmt()
+                return ContinueStmt(children[0].line, children[0].col)
             # Stmt → Expr ;
             if rhs == ['Expr', ';']:
                 expr = children[0]
-                return ExprStmt(expr)
+                return ExprStmt(expr,children[0].line, children[0].col)
 
         if lhs == 'Iterable' and rhs == ['Expr', '..', 'Expr']:
             return ('range', children[0], children[2])
@@ -378,7 +389,7 @@ class LR1Parser:
             # 比较运算
             for op in ('==','!=','<','<=','>','>='):
                 if rhs == ['Expr', op, 'Expr']:
-                    return BinaryOp(op, children[0], children[2])
+                    return BinaryOp(op, children[0], children[2],children[0].line, children[0].col)
             # 回退到 AddExpr
             if rhs == ['AddExpr']:
                 return children[0]
@@ -390,7 +401,8 @@ class LR1Parser:
             cond = children[2]
             then_blk = children[3]
             else_blk = children[4]
-            return Block([IfStmt(cond, then_blk, else_blk)])
+            # return Block([IfStmt(cond, then_blk, else_blk,children[1].line, children[1].col)])
+            return IfStmt(cond, then_blk, else_blk, children[1].line, children[1].col)
 
         if lhs == 'ElsePart' and not rhs:
             return None
@@ -398,17 +410,17 @@ class LR1Parser:
         # AddExpr / MulExpr
         if lhs == 'AddExpr':
             if rhs == ['AddExpr', '+', 'MulExpr']:
-                return BinaryOp('+', children[0], children[2])
+                return BinaryOp('+', children[0], children[2],children[0].line, children[0].col)
             if rhs == ['AddExpr', '-', 'MulExpr']:
-                return BinaryOp('-', children[0], children[2])
+                return BinaryOp('-', children[0], children[2],children[0].line, children[0].col)
             if rhs == ['MulExpr']:
                 return children[0]
 
         if lhs == 'MulExpr':
             if rhs == ['MulExpr', '*', 'Primary']:
-                return BinaryOp('*', children[0], children[2])
+                return BinaryOp('*', children[0], children[2],children[0].line, children[0].col)
             if rhs == ['MulExpr', '/', 'Primary']:
-                return BinaryOp('/', children[0], children[2])
+                return BinaryOp('/', children[0], children[2],children[0].line, children[0].col)
             if rhs == ['Primary']:
                 return children[0]
 
@@ -417,42 +429,42 @@ class LR1Parser:
             # IDENT ( ArgList )
             if rhs == ['IDENT', '(', 'ArgList', ')']:
                 args = children[2] if children[2] is not None else []
-                return FuncCall(Ident(children[0].value), args)
+                return FuncCall(Ident(children[0].value,children[0].line, children[0].col), args,children[0].line, children[0].col)
             # ( Expr )
             if rhs == ['(', 'Expr', ')']:
                 return children[1]
             # NUMBER
             if rhs == ['NUMBER']:
-                return NumberLit(int(children[0].value,0))
+                return NumberLit(int(children[0].value,0),children[0].line, children[0].col)
             # Assignable
             if rhs == ['Assignable']:
                 return children[0]
             # * Primary
             if rhs == ['*', 'Primary']:
-                return DerefExpr(children[1])
+                return DerefExpr(children[1],children[0].line, children[0].col)
             # & Primary
             if rhs == ['&', 'Primary']:
-                return BorrowExpr(children[1], mutable=False)
+                return BorrowExpr(children[1], False,children[0].line, children[0].col)
             # & mut Primary
             if rhs == ['&', 'mut', 'Primary']:
-                return BorrowExpr(children[2], mutable=True)
+                return BorrowExpr(children[2], True,children[0].line, children[0].col)
             # [ ExprList ]
             if rhs == ['[', 'ExprList', ']']:
-                return ArrayLiteral(children[1])
+                return ArrayLiteral(children[1],children[0].line, children[0].col)
             # ( ExprList )
                 # 单元素元组 (Expr, )
             if rhs == ['(', 'Expr', ',', ')']:
-                return TupleLiteral([children[1]])
+                return TupleLiteral([children[1]],children[0].line, children[0].col)
 
             # 多元素元组 (Expr, ExprList)
             if rhs == ['(', 'Expr', ',', 'ExprList', ')']:
-                return TupleLiteral([children[1]] + children[3])
+                return TupleLiteral([children[1]] + children[3],children[0].line, children[0].col)
 
             # 空元组 ()
             if rhs == ['(', ')']:
-                return TupleLiteral([])
+                return TupleLiteral([],children[0].line, children[0].col)
             if rhs == ['IDENT']:
-                return Ident(children[0].value)
+                return Ident(children[0].value,children[0].line, children[0].col)
 
         # ExprList
         if lhs == 'ExprList':
@@ -466,13 +478,13 @@ class LR1Parser:
         # Assignable
         if lhs == 'Assignable':
             if rhs == ['Primary', '[', 'Expr', ']']:
-                return IndexExpr(children[0], children[2])
+                return IndexExpr(children[0], children[2],children[0].line, children[0].col)
             if rhs == ['Primary', '.', 'NUMBER']:
-                return MemberExpr(children[0], int(children[2].value,0))
+                return MemberExpr(children[0], int(children[2].value,0),children[0].line, children[0].col)
             if rhs == ['IDENT']:
-                return Ident(children[0].value)
+                return Ident(children[0].value,children[0].line, children[0].col)
             if rhs == ['*', 'Primary']:
-                return DerefExpr(children[1])
+                return DerefExpr(children[1],children[0].line, children[0].col)
 
         # Type (keep as simple strings or tuples)
         if lhs == 'Type':
@@ -485,9 +497,9 @@ class LR1Parser:
             if rhs == ['[', 'Type', ';', 'NUMBER', ']']:
                 return ('array', children[1], int(children[3].value,0))
             if rhs == ['(', ')']:
-                return TupleLiteral([])
+                return TupleLiteral([],children[0].line, children[0].col)
             if rhs == ['(', 'TypeList', ')']:
-                return TupleLiteral(children[1])
+                return TupleLiteral(children[1],children[0].line, children[0].col)
 
         if lhs == 'TypeList':
             if rhs == ['Type']:
@@ -504,7 +516,7 @@ class LR1Parser:
         while isinstance(last, ExprStmt):
             last = last.expr
         if isinstance(last, Token):
-            return Ident(last.value)
+            return Ident(last.value,children[0].line, children[0].col)
         return last
 
 
