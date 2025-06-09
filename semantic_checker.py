@@ -444,17 +444,15 @@ class SemanticChecker:
         then_type=self.check(node.then_body)
 
         # 3.检查else
-        else_type=self.check(node.else_body)
-
-        if not then_type== else_type:
-            # 如果then和else的类型不一致，抛出错误
-            raise SemanticError(
-                f"if 语句的 then 和 else 分支类型不匹配：'{then_type}' vs '{else_type}'",
-                node.line, node.col)
-
-        # 4.返回类型
-        node.computed_type=then_type
-        return then_type
+        else_type=VOID
+        if node.else_body is not None:
+            else_type=self.check(node.else_body)
+        if then_type == else_type:
+            node.computed_type = then_type
+            return then_type
+        else:
+            node.computed_type = VOID
+            return VOID
 
     def check_Block(self, node: Block)->Type:
         self.enter_scope()
@@ -719,6 +717,12 @@ if __name__ == "__main__":
         checker = SemanticChecker()
         checker.check(ast)
         print("语义检查通过！")
+        #中间代码生成
+        from ir_generator import IRGenerator
+        ir_gen = IRGenerator()
+        ir_gen.generate(ast)
+        for quad in ir_gen.code:
+            print(quad)
     except (SemanticError,SyntaxError) as e:
         print(f"错误：{e}")
         sys.exit(1)
@@ -726,6 +730,3 @@ if __name__ == "__main__":
         print("发生了一个意外错误：")
         traceback.print_exc()
         sys.exit(1)
-
-
-

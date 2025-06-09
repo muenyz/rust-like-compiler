@@ -238,11 +238,12 @@ class Block(ASTNode):
         for idx, stmt in enumerate(self.stmts):
             stmt.graphviz(dot, node_id, f"stmt_{idx}")
 
-    def __init__(self, stmts,line,col):
+    def __init__(self, stmts, line, col, as_expr=False):
         self.stmts = stmts
         self.computed_type = None
         self.line = line
         self.col = col
+        self.as_expr = as_expr  # 新增的属性，用于标识是否作为表达式处理
 
 class Expr(ASTNode):
     def graphviz(self, dot=None, parent=None, edge_label=""):
