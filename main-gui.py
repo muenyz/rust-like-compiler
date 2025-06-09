@@ -4,8 +4,10 @@ from tkinter import filedialog, messagebox
 from lr1_parser import LR1Parser
 from lexer import tokenize_file, Lexer, TokenKind
 from PIL import Image, ImageTk
-from semantic_checker import run_semantic_checks
+#from semantic_checker import run_semantic_checks
+from semantic_checker import SemanticChecker
 import traceback
+from ir_generator import IRGenerator
 from tkinter import ttk
 
 TOKEN_COLORS = {
@@ -22,7 +24,7 @@ class CompilerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Rust-like Compiler GUI")
-        self.geometry("1000x700")
+        self.geometry("1400x700")
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("blue")
 
@@ -114,6 +116,28 @@ class CompilerApp(ctk.CTk):
         self.reduction_table.column("action", width=180)
         self.reduction_table.grid(row=0, column=0, sticky="nsew")
 
+        self.ir_tab = self.result_tabs.add("中间代码")
+        ir_frame = tk.Frame(self.ir_tab, bg="#262626")
+        ir_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        ir_frame.grid_rowconfigure(0, weight=1)
+        ir_frame.grid_columnconfigure(0, weight=1)
+
+        self.ir_table = ttk.Treeview(
+            ir_frame,
+            columns=("op", "arg1", "arg2", "result"),
+            show="headings"
+        )
+        self.ir_table.heading("op", text="操作")
+        self.ir_table.heading("arg1", text="参数1")
+        self.ir_table.heading("arg2", text="参数2")
+        self.ir_table.heading("result", text="结果")
+
+        self.ir_table.column("op", width=100)
+        self.ir_table.column("arg1", width=120)
+        self.ir_table.column("arg2", width=120)
+        self.ir_table.column("result", width=150)
+        self.ir_table.grid(row=0, column=0, sticky="nsew")
+
         scroll_y = tk.Scrollbar(reduction_frame, command=self.reduction_table.yview)
         scroll_y.grid(row=0, column=1, sticky="ns")
 
@@ -188,18 +212,18 @@ class CompilerApp(ctk.CTk):
         self.token_output.config(state="normal")
         self.token_output.delete("1.0", tk.END)
         self.token_output.config(state="disabled")
-
         self.reduction_table.delete(*self.reduction_table.get_children())
-
         self.ast_canvas.delete("all")
-
+        
         try:
+        # 词法分析
             tokens = tokenize_file("temp_test.rs")
             self.token_output.config(state="normal")
             for t in tokens:
                 self.token_output.insert("end", f"{t}\n")
             self.token_output.config(state="disabled")
 
+        # 语法分析
             parser = LR1Parser()
             parser.reduction_trace = []
             ast = parser.parse(tokens, trace_output=parser.reduction_trace)
@@ -210,21 +234,44 @@ class CompilerApp(ctk.CTk):
                     " ".join(row["input"]),
                     row["action"]
                 ))
-
             self.reduction_table.update_idletasks()
 
-            semantic_errors = run_semantic_checks(ast)
-            if semantic_errors:
-                messagebox.showerror("语义错误", "\n".join(semantic_errors))
-                return
+        # === 语义分析 ===
+            try:
+                checker = SemanticChecker()
+                checker.check(ast)
+                print("语义检查通过！")
+            except (SemanticError,SyntaxError) as e:
+                print(f"错误：{e}")
+                sys.exit(1)
+            except Exception:
+                print("发生了一个意外错误：")
+                traceback.print_exc()
+                sys.exit(1)
 
+
+        # === 中间代码生成 ===
+            irgen = IRGenerator()
+            irgen.generate(ast)
+            ir_output = irgen.code
+            # 清空旧表格内容
+            self.ir_table.delete(*self.ir_table.get_children())
+
+            # 插入新四元组数据
+            for quad in ir_output:
+                op, arg1, arg2, res = quad
+                self.ir_table.insert("", "end", values=(op, arg1, arg2, res))
+
+            self.ir_table.update_idletasks()
+                
+
+        # AST 图可视化
             dot = ast.graphviz()
             dot.attr(rankdir='TB')
             dot.render('ast_graph', format='png', cleanup=True)
 
             img = Image.open('ast_graph.png')
             self.original_image = img
-
             w, h = self.ast_canvas.winfo_width(), self.ast_canvas.winfo_height()
             if w <= 1 or h <= 1:
                 w, h = 800, 600
