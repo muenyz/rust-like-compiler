@@ -5,7 +5,7 @@ from lr1_parser import LR1Parser
 from lexer import tokenize_file, Lexer, TokenKind
 from PIL import Image, ImageTk
 #from semantic_checker import run_semantic_checks
-from semantic_checker import SemanticChecker
+from semantic_checker import SemanticChecker, SemanticError
 import traceback
 from ir_generator import IRGenerator
 from tkinter import ttk
@@ -214,7 +214,7 @@ class CompilerApp(ctk.CTk):
         self.token_output.config(state="disabled")
         self.reduction_table.delete(*self.reduction_table.get_children())
         self.ast_canvas.delete("all")
-        
+
         try:
         # 词法分析
             tokens = tokenize_file("temp_test.rs")
@@ -237,17 +237,9 @@ class CompilerApp(ctk.CTk):
             self.reduction_table.update_idletasks()
 
         # === 语义分析 ===
-            try:
-                checker = SemanticChecker()
-                checker.check(ast)
-                print("语义检查通过！")
-            except (SemanticError,SyntaxError) as e:
-                print(f"错误：{e}")
-                sys.exit(1)
-            except Exception:
-                print("发生了一个意外错误：")
-                traceback.print_exc()
-                sys.exit(1)
+            checker = SemanticChecker()
+            checker.check(ast)
+            print("语义检查通过！")
 
 
         # === 中间代码生成 ===
@@ -263,7 +255,7 @@ class CompilerApp(ctk.CTk):
                 self.ir_table.insert("", "end", values=(op, arg1, arg2, res))
 
             self.ir_table.update_idletasks()
-                
+
 
         # AST 图可视化
             dot = ast.graphviz()
@@ -285,8 +277,10 @@ class CompilerApp(ctk.CTk):
 
             self.highlight_code()
 
-        except Exception as e:
-            messagebox.showerror("分析错误", traceback.format_exc())
+        except (SemanticError, SyntaxError) as e:
+            messagebox.showerror("分析错误", f"发生了一个错误：\n{str(e)}")
+        except Exception:
+            messagebox.showerror("分析错误", "发生了一个未知错误，请检查代码。\n\n" + traceback.format_exc())
 
     def start_move(self, event):
         self._drag_data["x"] = event.x
